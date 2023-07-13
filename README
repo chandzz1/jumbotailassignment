@@ -1,0 +1,54 @@
+Ecommerce User Event Simulation
+This project simulates user behavior and generates events for an ecommerce application. The generated events are stored in a PostgreSQL database and can be sent to a webhook for further processing. The code also includes functionality to calculate the percentage of users in each stage of the user journey and evaluate the performance of different cities based on user engagement.
+
+Prerequisites
+Before running the code, ensure that you have the following prerequisites installed on your system:
+
+Python 3.x: Download Python
+PostgreSQL: Download PostgreSQL
+Setup
+Clone the repository or download the source code.
+
+Install the required Python dependencies by running the following command:
+
+
+pip install -r requirements.txt
+Set up the PostgreSQL database:
+
+Create a new PostgreSQL database by following the instructions specific to your operating system.
+
+Update the database connection details in the code:
+
+Open the ecommerce_user_simulation.py file in a text editor.
+Replace the placeholders in the conn variable with your PostgreSQL database connection details (host, database name, username, password).
+Configure the webhook URL:
+
+Open the ecommerce_user_simulation.py file in a text editor.
+Replace the WEBHOOK_URL constant with the actual URL where you want to send the generated events.
+Running the Code
+Start the Flask server by running the following command in the terminal:
+
+
+python ecommerce_user_simulation.py
+The Flask server will start running on http://localhost:8888.
+
+Open a new terminal window and run the following command to simulate user behavior and generate events:
+
+
+python ecommerce_user_simulation.py
+The simulated users will start generating events and pushing them to the event queue.
+
+Monitor the console output to see the progress and status of event generation, queue pushing, event insertion into the database, and event sending to the webhook.
+
+Once the user threads have completed their actions, the console output will display the percentage of users in each stage of the user journey and the evaluation of the performance of different cities.
+
+To stop the code execution, press Ctrl + C in the terminal where the Flask server is running.
+
+Additional Notes
+Adjust the NUM_USERS constant in the code to change the number of users to simulate.
+
+Modify the generate_events method in the EcommerceUserThread class to customize the event generation logic based on your specific requirements.
+
+If needed, you can update the maximum length of the event queue by modifying the event_queue instantiation in the code.
+
+For advanced customization, refer to the comments in the code for potential areas of modification.
