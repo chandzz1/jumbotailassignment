@@ -16,57 +16,31 @@ class EcommerceUserThread(threading.Thread):
         self.event_repository = event_repository
 
     def run(self):
-        # Simulate user behavior and generate events
         events = self.generate_events()
-
-        # Push events to the in-memory queue with retry mechanism
         self.push_events_to_queue(events)
 
     def generate_events(self):
-        # Implement event generation logic based on user behavior
-        # Consider the ratio of events, order of events, stages of engagement, and user dropouts
         events = []
-
-        # Example event generation logic (modify based on your requirements)
-        num_events = random.randint(1, 10)  # Generate a random number of events
+        cities = ["chennai", "delhi", "hyderabad", "kolkata", "mumbai", "pune"]
+        num_events = random.randint(1, 10)
         for _ in range(num_events):
             event = {
                 "user_id": self.user_id,
-                "event_type": random.choice(["click", "purchase", "view"]),
+                "event_type": random.choice(["click", "purchase", "view", "selects product", "adds to cart"]),
                 "timestamp": time.time(),
-                # Add other necessary attributes for your events
+                "stage": random.randint(1, 6),  # Random stage number from 1 to 6
+                "city": random.choice(cities),
             }
             events.append(event)
-
         return events
 
     def push_events_to_queue(self, events):
-        max_retries = 3  # Maximum number of retry attempts
-
         for event in events:
-            success = False
-            retries = 0
-
-            while not success and retries < max_retries:
-                try:
-                    self.event_queue.append(event)
-                    success = True
-                    print(f"Event pushed to the queue for user {self.user_id}")
-                except IndexError:
-                    retries += 1
-                    print(f"Queue is full. Retrying to push event for user {self.user_id}. Retry attempt {retries} of {max_retries}")
-                    time.sleep(1)  # Wait for some time before retrying
-
-            if not success:
-                print(f"Failed to push event to the queue for user {self.user_id} after {max_retries} retries")
+            self.event_queue.append(event)
+            print(f"Event pushed to the queue for user {self.user_id}")
 
     def send_batch_to_webhook(self, batch):
-        # Implement the logic to send the event batch to the webhook
-        # You can use appropriate libraries or modules to make HTTP requests
-
-        # Example code using requests library
         import requests
-
         try:
             response = requests.post(self.webhook_url, json=batch)
             if response.status_code == 200:
@@ -76,22 +50,21 @@ class EcommerceUserThread(threading.Thread):
         except requests.exceptions.RequestException as e:
             print(f"Error occurred while sending events for user {self.user_id}. {str(e)}")
 
-
 # Number of users to simulate
 NUM_USERS = 10
 
 # Webhook URL to send events
-WEBHOOK_URL = "http://localhost:8888/webhook"  # Replace with your actual webhook URL
+WEBHOOK_URL = "http://localhost:8888/webhook"
 
 # Create an in-memory event queue using deque
 event_queue = deque(maxlen=100)  # Adjust the maxlen based on your requirements
 
 # Connect to the PostgreSQL database
 conn = psycopg2.connect(
-    host="your_host",
-    database="your_database",
-    user="your_user",
-    password="your_password"
+    host="localhost",
+    database="user1",
+    user="postgres",
+    password="1234"
 )
 
 # Create a cursor for database operations
@@ -100,26 +73,27 @@ cursor = conn.cursor()
 # Create a sample event repository with PostgreSQL integration
 class EventRepository:
     def insert(self, event):
-        # Insert event into the PostgreSQL database
-        query = "INSERT INTO events (user_id, event_type, timestamp) VALUES (%s, %s, %s)"
-        values = (event["user_id"], event["event_type"], event["timestamp"])
+        query = "INSERT INTO events (user_id, event_type, timestamp, stage, city) VALUES (%s, %s, %s, %s, %s)"
+        values = (
+            event["user_id"],
+            event["event_type"],
+            event["timestamp"],
+            event["stage"],
+            event["city"],
+        )
         cursor.execute(query, values)
         conn.commit()
         print(f"Event inserted into the database: {event}")
 
     def count_users_in_each_stage(self):
-        # Perform the necessary query to count the number of users in each stage
-        # Example using SQL query
-        query = "SELECT stage, COUNT(*) FROM events GROUP BY stage"
+        query = "SELECT event_type, COUNT(*) FROM events GROUP BY event_type"
         cursor.execute(query)
         result = cursor.fetchall()
         stage_counts = {row[0]: row[1] for row in result}
         return stage_counts
 
     def count_users_in_each_city(self):
-        # Perform the necessary query to count the number of users in each city
-        # Example using SQL query
-        query = "SELECT city, COUNT(*) FROM events GROUP BY city"
+        query = "SELECT city, COUNT(DISTINCT user_id) FROM events GROUP BY city"
         cursor.execute(query)
         result = cursor.fetchall()
         city_counts = {row[0]: row[1] for row in result}
@@ -131,11 +105,13 @@ class EventRepository:
         percentage_users = {stage: (count / total_users) * 100 for stage, count in stage_counts.items()}
         return percentage_users
 
-    def calculate_percentage_users_in_each_city(self):
-        city_counts = self.count_users_in_each_city()
-        total_users = sum(city_counts.values())
-        percentage_users = {city: (count / total_users) * 100 for city, count in city_counts.items()}
-        return percentage_users
+
+
+    def get_user_activities(self):
+        query = "SELECT * FROM events"
+        cursor.execute(query)
+        result = cursor.fetchall()
+        return result
 
 # Create the event repository instance
 event_repository = EventRepository()
@@ -148,11 +124,14 @@ for i in range(NUM_USERS):
     user_thread.start()
 
 # Start the Flask server to receive events
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["POST", "GET"])
 def webhook():
-    event = request.json
-    event_repository.insert(event)
-    return "Event received"
+    if request.method == "POST":
+        event = request.json
+        event_repository.insert(event)
+        return "Event received"
+    else:
+        return "This endpoint only supports POST requests."
 
 # Run the Flask server in a separate thread
 server_thread = threading.Thread(target=app.run, kwargs={"host": "localhost", "port": 8888})
@@ -165,17 +144,25 @@ for user_thread in user_threads:
 # Calculate percentages of users in each stage
 stage_percentages = event_repository.calculate_percentage_users_in_each_stage()
 
-# Calculate percentages of users in each city
-city_percentages = event_repository.calculate_percentage_users_in_each_city()
+# Calculate the number of users in each city
+city_counts = event_repository.count_users_in_each_city()
+
+# Fetch user activities
+user_activities = event_repository.get_user_activities()
 
 # Print the results
-print("Percentage of users in each stage of the user journey:")
-for stage, percentage in stage_percentages.items():
-    print(f"{stage}: {percentage}%")
+print("Simulating user events completed.\n")
+print("User activities:")
+for activity in user_activities:
+    print(activity)
 
-print("\nEvaluation of the performance of different cities:")
-for city, percentage in city_percentages.items():
-    print(f"{city}: {percentage}%")
+print("\nPercentage of users in each stage:")
+for event_type, percentage in stage_percentages.items():
+    print(f"{event_type.capitalize()}: {percentage:.2f}%")
+
+print("\nNumber of users in each city:")
+for city, count in city_counts.items():
+    print(f"{city}: {count}")
 
 # Stop the Flask server
 server_thread.join()
@@ -184,4 +171,4 @@ server_thread.join()
 cursor.close()
 conn.close()
 
-print("All users have completed their actions.")
+print("\nAll users have completed their actions.")
